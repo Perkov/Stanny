@@ -1,7 +1,6 @@
 ﻿import os
 import sys
 import json
-import subprocess
 from pathlib import Path
 from fiona import _shim, schema
 
@@ -12,22 +11,21 @@ from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog,
     QHBoxLayout, QTableView, QErrorMessage, QCompleter, QComboBox
 from PyQt5.QtCore import Qt, QSortFilterProxyModel, QStringListModel, QCoreApplication, QAbstractTableModel
 import matplotlib.pyplot as plt
-from PyQt5.uic.properties import QtWidgets
-from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 from itertools import islice
-import seaborn as sns
 
 plt.style.use('_classic_test')
 
 KS_CLIP = f'{os.getcwd()}/stanista_clippana'
 
-all_paths = islice(list(Path(KS_CLIP).rglob("*.shp")), 1000)
-all_paths = [str(i) for i in all_paths]
-file_names = [os.path.split(i)[1] for i in all_paths[1:]]
-FILE_NAMES = [' '.join(i.split('_')[1:]).split('.')[0] for i in file_names]
-FILE_NAMES.insert(0, "<unesi naziv podrucja EM>")
+def parse_filenames(path):
+    all_paths = islice(list(Path(path).rglob("*.shp")), 1000)
+    all_paths = [str(i) for i in all_paths]
+    file_names = [os.path.split(i)[1] for i in all_paths[1:]]
+    file_names = [' '.join(i.split('_')[1:]).split('.')[0] for i in file_names]
+    file_names.insert(0, "<unesi naziv podrucja EM>")
+    return file_names
 
+FILE_NAMES = parse_filenames(KS_CLIP)
 PARENT_DIR = os.getcwd()
 
 os.chdir(rf'{os.getcwd()}\nks')
