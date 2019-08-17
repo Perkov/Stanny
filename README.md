@@ -1,2 +1,5 @@
 # Stanny
- Tool for visualizing, clipping and analyzing geospatial files with habitats data (Croatia)
+ Tool with GUI for visualizing, clipping and analyzing geospatial data (ESRI shapefiles with habitats data (Croatia)).
+ 
+ 
+ ![alt text](https://imgur.com/a/fbqlvk7)
