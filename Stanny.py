@@ -23,35 +23,19 @@ def parse_filenames(path):
     file_names = [os.path.split(i)[1] for i in all_paths[1:]]
     file_names = [' '.join(i.split('_')[1:]).split('.')[0] for i in file_names]
     file_names.insert(0, "<unesi naziv podrucja EM>")
-    return file_names
+    return file_names, all_paths
 
-FILE_NAMES = parse_filenames(KS_CLIP)
+
+FILE_NAMES = parse_filenames(KS_CLIP)[0]
+ALL_PATHS = parse_filenames(KS_CLIP)[1]
 PARENT_DIR = os.getcwd()
 
-os.chdir(rf'{os.getcwd()}\nks')
-
-with open('annex_dict_.json', 'r', encoding="utf8") as a, open(
-        'povs_dict_2.json', 'r', encoding="utf8"
-) as b, open('data.json', 'r', encoding="utf8") as c:
+with open(f'{PARENT_DIR}/nks/annex_dict_.json', 'r', encoding="utf8") as a, open(
+        f'{PARENT_DIR}/nks/povs_dict_2.json', 'r', encoding="utf8"
+) as b, open(f'{PARENT_DIR}/nks/data.json', 'r', encoding="utf8") as c:
     DICT_annex = json.load(a)
     DICT_povs = json.load(b)
     DICT_nazivi = json.load(c)
-
-os.chdir(PARENT_DIR)
-
-
-class Parser():
-    """
-    It passes selected folder to FileNames object.
-    Gets back list of filenames and prepares the data for
-    text box and graph.
-    """
-    def __init__(self, folder_name):
-        self.folder_name = folder_name
-        self.file_list = FileNames(folder_name).file_names
-        self.file_list.sort()
-        self.for_text = ' \n'.join(self.file_list)
-        self.for_graph = [i[0].lower() for i in self.file_list]
 
 
 class FileNames():
@@ -261,7 +245,7 @@ class Window(QMainWindow):
 class GetShapeFile:
     def __init__(self, string):
         self.path = None
-        for i in all_paths:
+        for i in ALL_PATHS:
             if string.split()[0] in i:
                 self.path = i
 
