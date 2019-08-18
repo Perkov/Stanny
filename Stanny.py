@@ -289,6 +289,7 @@ class Clipper:
         self.output_gdf = None
 
     def get_clip_file(self):
+        print(self.shp_clip)
         clip_with = geopandas.GeoDataFrame.from_file(self.shp_clip)
         to_clip = geopandas.GeoDataFrame.from_file(self.shapefile)
         gdf_clipped = geopandas.overlay(clip_with, to_clip, how="intersection")
