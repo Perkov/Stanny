@@ -1,17 +1,17 @@
-﻿import os
+﻿import json
+import os
 import sys
-import json
-from pathlib import Path
-from fiona import _shim, schema
-
-import numpy as np
-import geopandas
-from PyQt5.QtGui import QStandardItemModel, QStandardItem, QFont
-from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QTextEdit, QVBoxLayout, QWidget, \
-    QHBoxLayout, QTableView, QErrorMessage, QCompleter, QComboBox
-from PyQt5.QtCore import Qt, QSortFilterProxyModel, QStringListModel, QCoreApplication, QAbstractTableModel
-import matplotlib.pyplot as plt
 from itertools import islice
+from pathlib import Path
+
+import geopandas
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from PyQt5.QtCore import Qt, QSortFilterProxyModel, QCoreApplication, QAbstractTableModel
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QFont
+from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QTextEdit, QTableView, QErrorMessage, \
+    QCompleter, QComboBox
 
 plt.style.use('_classic_test')
 
@@ -36,6 +36,27 @@ with open(f'{PARENT_DIR}/nks/annex_dict_.json', 'r', encoding="utf8") as a, open
     DICT_annex = json.load(a)
     DICT_povs = json.load(b)
     DICT_nazivi = json.load(c)
+
+
+def mask_ciljna_stanista(row):
+    if row['broj_ciljnih'] == 2:
+        row['ciljni'] = row['ciljni'].split(',')
+        row2 = row.copy()
+        row['ciljni'] = row['ciljni'][0]
+        row2['ciljni'] = row2['ciljni'][1]
+        row.replace({row2['ciljni']: ' xxx'}, regex=True, inplace=True)
+        row2.replace({row['ciljni']: ' xxx'}, regex=True, inplace=True)
+        return pd.concat([row, row2], axis=1)
+    #     elif row['broj_ciljnih'] == 3:
+    #         row['ciljni'] = row['ciljni'].split(',')
+    #         row2 = row.copy()
+    #         row3 = row.copy()
+    #         row['ciljni'] = row['ciljni'][0] + ', xxx' + ', xxx'
+    #         row2['ciljni'] = 'xxx, ' + row2['ciljni'][1] + ', xxx'
+    #         row3['ciljni'] = 'xxx, ' + ' xxx, ' + + row2['ciljni'][2]
+    #         return pd.concat([row, row2], axis=1)
+
+    return row
 
 
 class FileNames():
@@ -321,6 +342,7 @@ class HabitatsData:
         m_d = self.prepare_matches()
         df = self.impact_gdf_ciljni
         hab_dict_cln = dict(self.habitats)
+        # df.replace({'E D342 C361':'F41 D342 C361'}, regex=True, inplace=True) #TO DELETE!!!
         if any(key.startswith('*')|key.endswith('*') for key in dict(self.habitats)):
             hab_dict_cln = {k.replace('*', ''): v for k, v in (dict(self.habitats)).items()}
         df['ciljni'] = (df['NKS_KOMB']
@@ -338,9 +360,19 @@ class HabitatsData:
 
     def parse_special_characters(self, df, m_d, hab_dict_cln):
         df.dropna(inplace=True)
+        df['broj_ciljnih'] = df['ciljni'].str.split(",").str.len()
+        df = pd.concat(
+            [mask_ciljna_stanista(row) for _, row in df.iterrows()],
+            ignore_index=True, axis=1
+        ).T
+        df['ciljni'].replace(' ', '', regex=True, inplace=True)
+
         if search_dict(m_d, '*'):
-            df['natura_kod'] = df['ciljni'].apply(lambda x: m_d[x])
+
+            df['natura_kod'] = df['ciljni'].apply(lambda x: [m_d[x]])
+            df['natura_kod'] = df['natura_kod'].apply(lambda x: ''.join(x))
             df['natura_kod_temp'] = df['natura_kod'].str.replace('*', '')
+
             df['n2k_hab_naziv'] = df['natura_kod_temp'].apply(
                 lambda x: hab_dict_cln[x])
             df.drop(columns=['natura_kod_temp'], inplace=True)
