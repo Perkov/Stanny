@@ -44,19 +44,56 @@ def mask_ciljna_stanista(row):
         row2 = row.copy()
         row['ciljni'] = row['ciljni'][0]
         row2['ciljni'] = row2['ciljni'][1]
-        row.replace({row2['ciljni']: ' xxx'}, regex=True, inplace=True)
-        row2.replace({row['ciljni']: ' xxx'}, regex=True, inplace=True)
+        row.replace({row2['ciljni']: ' ***'}, regex=True, inplace=True)
+        row2.replace({row['ciljni']: '***'}, regex=True, inplace=True)
         return pd.concat([row, row2], axis=1)
-    #     elif row['broj_ciljnih'] == 3:
-    #         row['ciljni'] = row['ciljni'].split(',')
-    #         row2 = row.copy()
-    #         row3 = row.copy()
-    #         row['ciljni'] = row['ciljni'][0] + ', xxx' + ', xxx'
-    #         row2['ciljni'] = 'xxx, ' + row2['ciljni'][1] + ', xxx'
-    #         row3['ciljni'] = 'xxx, ' + ' xxx, ' + + row2['ciljni'][2]
-    #         return pd.concat([row, row2], axis=1)
-
     return row
+
+
+def f_max(row):
+    if len(row['temp']) == 3 and row['ciljni'] in row['temp'][0]:
+        val = row['impact_area']*0.65
+    elif len(row['temp']) == 3 and row['ciljni'] in row['temp'][1]:
+        val = row['impact_area']*0.40
+    elif len(row['temp']) == 3 and row['ciljni'] in row['temp'][2]:
+        val = row['impact_area']*0.25
+    elif len(row['temp']) == 2 and row['ciljni'] in row['temp'][0]:
+        val = row['impact_area']*0.85
+    elif len(row['temp']) == 2 and row['ciljni'] in row['temp'][1]:
+        val = row['impact_area']*0.45
+    else:
+        val = row['impact_area']
+    return val
+
+
+def f_min(row):
+    if len(row['temp']) == 3 and row['ciljni'] in row['temp'][0]:
+        val = row['impact_area']*0.34
+    elif len(row['temp']) == 3 and row['ciljni'] in row['temp'][1]:
+        val = row['impact_area']*0.20
+    elif len(row['temp']) == 3 and row['ciljni'] in row['temp'][2]:
+        val = row['impact_area']*0.15
+    elif len(row['temp']) == 2 and row['ciljni'] in row['temp'][0]:
+        val = row['impact_area']*0.46
+    elif len(row['temp']) == 2 and row['ciljni'] in row['temp'][1]:
+        val = row['impact_area']*0.15
+    else:
+        val = row['impact_area']*0.85
+    return val
+
+
+def calculate(row):
+    if row['b'] == None and row['c'] == None:
+        val = row['AREA_HA']
+    elif row['c'] == None:
+        val = [row['AREA_HA']*0.80, row['AREA_HA']*0.45]
+    else:
+        val = [
+            row['AREA_HA']*0.65,
+            row['AREA_HA']*0.40,
+            row['AREA_HA']*0.25
+        ]
+    return val
 
 
 class FileNames():
@@ -163,7 +200,6 @@ class Window(QMainWindow):
     def folder_path(self):
         "Getting path of selected folder and passing to loading method."
         f_path = QFileDialog.getOpenFileName(self, 'odaberi shapefile s kojim clippas')
-        print(f_path)
         if 'shp' in f_path[0]:
             self.load_after_getting_path(f_path)
             self.popup_clipped_shp()
@@ -205,8 +241,9 @@ class Window(QMainWindow):
 
     def show_table(self):
         if self.output_gdf is not None:
-            df = self.output_gdf.geometry
-            df.plot()
+            df = self.output_gdf
+            ax = df.plot(column='NKS_KOMB', categorical=True)
+            df.apply(lambda x: ax.annotate(s=x['NKS_KOMB'], xy=x.geometry.centroid.coords[0], ha='center'), axis=1);
             plt.show()
         else:
             self.error_dialog = QErrorMessage()
@@ -227,10 +264,17 @@ class Window(QMainWindow):
         if self.impact_gdf is not None:
             self.calculate_n2k_loss()
             if self.impact_ciljni is not None:
-                self.impact_model = PandasModel(self.impact_ciljni)
+                self.impact_ciljni.drop(
+                        columns=['impact_area', 'impact_percentage'],
+                        inplace=True,
+                        axis=1)
+                df = self.impact_ciljni.groupby(
+                    ['natura_kod', 'n2k_hab_naziv','ciljni'], as_index=False
+                ).sum()
+                self.impact_model = PandasModel(df.copy().round(3))
                 self.table.setModel(self.impact_model)
                 self.table.show()
-                self.setup_plotting(self.impact_ciljni)
+                self.setup_plotting_n2k(df)
                 plt.show()
             else:
                 self.error_dialog = QErrorMessage()
@@ -245,6 +289,14 @@ class Window(QMainWindow):
         )
         ax = df.plot(x="NKS_KOMB", y=["impact_percentage", "impact_area"], kind="barh")
         ax.set(xlabel="povrsina u ha", ylabel='NKS_KOMB')
+
+    def setup_plotting_n2k(self, df):
+        df.reset_index(inplace=True)
+        df = df[['natura_kod', 'misjak_min', 'misjak_max']].sort_values(
+            'misjak_min', ascending=False
+        )
+        ax = df.plot(x="natura_kod", y=["misjak_min", "misjak_max"], kind="barh")
+        ax.set(xlabel="povrsina u ha", ylabel='natura kod')
 
     def calculate_loss(self):
         em_gdf = ShapefileLoader(self.shapefile.path).gdf
@@ -300,7 +352,7 @@ class ImpactCalculator:
             columns={'new_area': 'impact_area', 'AREA_HA':'total_area'}, inplace=True
         )
         merged_df = merged_df.round(3)
-        merged_df = merged_df.sort_values(by = ['impact_area'])
+        merged_df = merged_df.sort_values(by = ['impact_percentage'])
         self.impact_table = merged_df
 
 class Clipper:
@@ -310,7 +362,6 @@ class Clipper:
         self.output_gdf = None
 
     def get_clip_file(self):
-        print(self.shp_clip)
         clip_with = geopandas.GeoDataFrame.from_file(self.shp_clip)
         to_clip = geopandas.GeoDataFrame.from_file(self.shapefile)
         gdf_clipped = geopandas.overlay(clip_with, to_clip, how="intersection")
@@ -342,7 +393,6 @@ class HabitatsData:
         m_d = self.prepare_matches()
         df = self.impact_gdf_ciljni
         hab_dict_cln = dict(self.habitats)
-        # df.replace({'E D342 C361':'F41 D342 C361'}, regex=True, inplace=True) #TO DELETE!!!
         if any(key.startswith('*')|key.endswith('*') for key in dict(self.habitats)):
             hab_dict_cln = {k.replace('*', ''): v for k, v in (dict(self.habitats)).items()}
         df['ciljni'] = (df['NKS_KOMB']
@@ -372,7 +422,6 @@ class HabitatsData:
             df['natura_kod'] = df['ciljni'].apply(lambda x: [m_d[x]])
             df['natura_kod'] = df['natura_kod'].apply(lambda x: ''.join(x))
             df['natura_kod_temp'] = df['natura_kod'].str.replace('*', '')
-
             df['n2k_hab_naziv'] = df['natura_kod_temp'].apply(
                 lambda x: hab_dict_cln[x])
             df.drop(columns=['natura_kod_temp'], inplace=True)
@@ -380,7 +429,12 @@ class HabitatsData:
             df['natura_kod'] = df['ciljni'].apply(lambda x: m_d[x])
             df['n2k_hab_naziv'] = df['natura_kod'].apply(
                 lambda x: hab_dict_cln[x])
-        return df
+
+        df['temp'] = df['NKS_KOMB'].str.split(' ')
+        df['misjak_min'] = df.apply(f_min, axis=1)
+        df['misjak_max'] = df.apply(f_max, axis=1)
+        df.drop(columns=['temp','broj_ciljnih'], axis=1, inplace=True)
+        return df.round(3)
 
     def prepare_matches(self):
         matches = self.decode_habitats_to_nks()
