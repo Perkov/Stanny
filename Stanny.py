@@ -8,7 +8,8 @@ import geopandas
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from PyQt5.QtCore import Qt, QSortFilterProxyModel, QCoreApplication, QAbstractTableModel
+import webbrowser
+from PyQt5.QtCore import Qt, QSortFilterProxyModel, QCoreApplication, QAbstractTableModel, QUrl
 from PyQt5.QtGui import QStandardItemModel, QStandardItem, QFont
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QFileDialog, QTextEdit, QTableView, QErrorMessage, \
     QCompleter, QComboBox
@@ -40,13 +41,38 @@ with open(f'{PARENT_DIR}/nks/annex_dict_.json', 'r', encoding="utf8") as a, open
 
 def mask_ciljna_stanista(row):
     if row['broj_ciljnih'] == 2:
+
         row['ciljni'] = row['ciljni'].split(',')
+
+        row1 = row.copy()
         row2 = row.copy()
-        row['ciljni'] = row['ciljni'][0]
-        row2['ciljni'] = row2['ciljni'][1]
-        row.replace({row2['ciljni']: ' ***'}, regex=True, inplace=True)
-        row2.replace({row['ciljni']: '***'}, regex=True, inplace=True)
-        return pd.concat([row, row2], axis=1)
+
+        row1['ciljni'] = row['ciljni'][0]
+        row2['ciljni'] = row['ciljni'][1]
+
+        row1['NKS_KOMB'] = f'{row["ciljni"][0]} *** ***'
+        row2['NKS_KOMB'] = f'***  {row["ciljni"][1]} ***'
+
+        return pd.concat([row1, row2], axis=1)
+
+    elif row['broj_ciljnih'] == 3:
+
+        row['ciljni'] = row['ciljni'].split(',')
+
+        row1 = row.copy()
+        row2 = row.copy()
+        row3 = row.copy()
+
+        row1['ciljni'] = row['ciljni'][0]
+        row2['ciljni'] = row['ciljni'][1]
+        row3['ciljni'] = row['ciljni'][2]
+
+        row1['NKS_KOMB'] = f'{row["ciljni"][0]} *** ***'
+        row2['NKS_KOMB'] = f'***  {row["ciljni"][1]} ***'
+        row3['NKS_KOMB'] = f'***  *** {row["ciljni"][2]}'
+
+        return pd.concat([row1, row2, row3], axis=1)
+
     return row
 
 
@@ -144,6 +170,7 @@ class Window(QMainWindow):
         self.setGeometry(self.top, self.left, self.width, self.height)
         self.text = QTextEdit(self)
         self.combo = ExtendedCombo(self)
+        self.web_code = self.open_web()
         self.table = QTableView()
         self.table.move(10, 400)
         self.table.setGeometry(50, 100, 800, 600)
@@ -168,7 +195,7 @@ class Window(QMainWindow):
 
         button3 = QPushButton('Odaberite File s kojim clipate', self)
         button3.setGeometry(200, 200, 265, 30)
-        button3.move(335, 132)
+        button3.move(335, 185)
         button3.clicked.connect(self.folder_path)
 
         button4 = QPushButton('Prikazi clippane povrsine', self)
@@ -186,11 +213,52 @@ class Window(QMainWindow):
         button6.move(335, 380)
         button6.clicked.connect(self.show_loss_n2k)
 
+        button5_dl = QPushButton('⏬', self)
+        button5_dl.setGeometry(200, 200, 30, 30)
+        button5_dl.move(300, 340)
+        button5_dl.clicked.connect(self.dl_table)
+
+        button6_dl = QPushButton('⏬', self)
+        button6_dl.setGeometry(200, 200, 30, 30)
+        button6_dl.move(300, 380)
+        button6_dl.clicked.connect(self.dl_table_n2k)
+
+        button7 = QPushButton('SDF 🠉', self)
+        button7.setGeometry(200, 200, 130, 31)
+        button7.move(335, 80)
+        button7.clicked.connect(self.open_web)
+
+    def open_web(self):
+        if self.shapefile is not None:
+            webbrowser.open(
+                f"http://natura2000.eea.europa.eu/Natura2000/SDF.aspx?site={self.combo.currentText().split()[0]}"
+            )
+
+    def dl_table(self):
+        if self.impact_gdf is not None:
+            self.calculator.impact_table.to_excel(f"{PARENT_DIR}/tmp/tablica_sve.xlsx")
+            os.startfile(f"{PARENT_DIR}/tmp")
+        else:
+            self.error_dialog = QErrorMessage()
+            self.error_dialog.showMessage('Niste clippali!')
+
+    def dl_table_n2k(self):
+        if self.impact_gdf is not None:
+            df = self.impact_ciljni.groupby(
+                ['natura_kod', 'n2k_hab_naziv', 'ciljni'], as_index=False
+            ).sum()
+            df.to_excel(f"{PARENT_DIR}/tmp/tablica_n2k.xlsx")
+            os.startfile(f"{PARENT_DIR}/tmp")
+        else:
+            self.error_dialog = QErrorMessage()
+            self.error_dialog.showMessage('Niste clippali!')
+
     def update(self):
         if '<' not in self.combo.currentText():
             self.text.setText(
                 f' \nPdrucje EM koje cu klippati: \n{self.combo.currentText()}\n'
             )
+            self.web_code = self.combo.currentText().split()[0]
             self.shapefile = GetShapeFile(TextInstance(self.combo.currentText()).text)
             self.graph = ShapefileLoader(self.shapefile.path).gdf
         else:
@@ -418,7 +486,6 @@ class HabitatsData:
         df['ciljni'].replace(' ', '', regex=True, inplace=True)
 
         if search_dict(m_d, '*'):
-
             df['natura_kod'] = df['ciljni'].apply(lambda x: [m_d[x]])
             df['natura_kod'] = df['natura_kod'].apply(lambda x: ''.join(x))
             df['natura_kod_temp'] = df['natura_kod'].str.replace('*', '')
