@@ -15,4 +15,4 @@ geopandas == 0.5.1
 matplotlib == 2.1.1
 
 # Stanny.py: 7
-numpy == 1.13.3
+numpy == 1.22.0
